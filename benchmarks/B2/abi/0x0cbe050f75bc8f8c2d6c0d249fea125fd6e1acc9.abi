@@ -1,0 +1,1 @@
+[{"constant":false,"inputs":[{"name":"a","type":"address"}],"name":"callAddress","outputs":[],"payable":false,"stateMutability":"nonpayable","type":"function"}]
