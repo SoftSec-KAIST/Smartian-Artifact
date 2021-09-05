@@ -18,8 +18,6 @@ contract PENNY_BY_PENNY
     
     uint public MinSum;
     
-    LogFile Log;
-    
     bool intitalized;
     
     function SetMinSum(uint _val)
@@ -33,7 +31,6 @@ contract PENNY_BY_PENNY
     public
     {
         if(intitalized)throw;
-        Log = LogFile(_log);
     }
     
     function Initialized()
@@ -49,7 +46,6 @@ contract PENNY_BY_PENNY
         var acc = Acc[msg.sender];
         acc.balance += msg.value;
         if(now+_lockTime>acc.unlockTime)acc.unlockTime=now+_lockTime;
-        Log.AddMessage(msg.sender,msg.value,"Put");
     }
     
     function Collect(uint _am)
@@ -63,7 +59,6 @@ contract PENNY_BY_PENNY
             if(msg.sender.call.value(_am)())
             {
                 acc.balance-=_am;
-                Log.AddMessage(msg.sender,_am,"Collect");
             }
         }
     }
@@ -75,30 +70,4 @@ contract PENNY_BY_PENNY
         Put(0);
     }
     
-}
-
-
-contract LogFile
-{
-    struct Message
-    {
-        address Sender;
-        string  Data;
-        uint Val;
-        uint  Time;
-    }
-    
-    Message[] public History;
-    
-    Message LastMsg;
-    
-    function AddMessage(address _adr,uint _val,string _data)
-    public
-    {
-        LastMsg.Sender = _adr;
-        LastMsg.Time = now;
-        LastMsg.Val = _val;
-        LastMsg.Data = _data;
-        History.push(LastMsg);
-    }
 }

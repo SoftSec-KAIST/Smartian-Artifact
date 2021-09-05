@@ -17,7 +17,6 @@
 0x5aa88d2901c68fda244f1d0584400368d2c8e739,MultiplicatorX3
 0x610495793564aed0f9c7fc48dc4c7c9151d34fd6,SimpleWallet
 0x627fa62ccbb1c1b04ffaecd72a53e37fc0e17839,TokenBank
-0x663e4229142a27f00bafb5d087e1e730648314c3,PandaCore
 0x70f9eddb3931491aab1aeafbc1e7f1ca2a012db4,HomeyJar
 0x78c2a1e91b52bca4130b6ed9edd9fbcfd4671c37,WhaleGiveaway1
 0x7a4349a749e59a5736efb7826ee3496a2dfd5489,WhaleGiveaway1
@@ -60,7 +59,6 @@ lottery,Lottery
 lotto,Lotto
 lucky_doubler,LuckyDoubler
 mishandled,SendBack
-modifier_reentrancy,ModifierEntrancy
 old_blockhash,PredictTheBlockHashChallenge
 random_number_generator,RandomNumberGenerator
 reentrance,Reentrance
@@ -71,5 +69,4 @@ reentrancy_insecure,Reentrancy_insecure
 reentrancy_simple,Reentrance
 simple_dao,SimpleDAO
 smart_billions,SmartBillions
-spank_chain_payment,LedgerChannel
 unchecked_return_value,ReturnValue

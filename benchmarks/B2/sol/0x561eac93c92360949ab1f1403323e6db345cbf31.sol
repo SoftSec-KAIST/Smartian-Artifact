@@ -12,8 +12,6 @@ contract BANK_SAFE
    
     uint public MinSum;
     
-    LogFile Log;
-    
     bool intitalized;
     
     function SetMinSum(uint _val)
@@ -27,7 +25,6 @@ contract BANK_SAFE
     public
     {
         if(intitalized)throw;
-        Log = LogFile(_log);
     }
     
     function Initialized()
@@ -41,7 +38,6 @@ contract BANK_SAFE
     payable
     {
         balances[msg.sender]+= msg.value;
-        Log.AddMessage(msg.sender,msg.value,"Put");
     }
     
     function Collect(uint _am)
@@ -54,7 +50,6 @@ contract BANK_SAFE
             if(msg.sender.call.value(_am)())
             {
                 balances[msg.sender]-=_am;
-                Log.AddMessage(msg.sender,_am,"Collect");
             }
         }
     }
@@ -66,31 +61,4 @@ contract BANK_SAFE
         Deposit();
     }
     
-}
-
-
-
-contract LogFile
-{
-    struct Message
-    {
-        address Sender;
-        string  Data;
-        uint Val;
-        uint  Time;
-    }
-    
-    Message[] public History;
-    
-    Message LastMsg;
-    
-    function AddMessage(address _adr,uint _val,string _data)
-    public
-    {
-        LastMsg.Sender = _adr;
-        LastMsg.Time = now;
-        LastMsg.Val = _val;
-        LastMsg.Data = _data;
-        History.push(LastMsg);
-    }
 }
