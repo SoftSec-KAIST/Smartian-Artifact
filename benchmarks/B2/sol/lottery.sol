@@ -31,7 +31,7 @@
      }
 
      // Make a bet
-     function makeBet() {
+     function makeBet() payable {
          // Won if block number is even
          // (note: this is a terrible source of randomness, please don't use this with real money)
          // <yes> <report> BAD_RANDOMNESS

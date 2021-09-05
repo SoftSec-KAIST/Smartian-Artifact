@@ -11,6 +11,10 @@ contract Reentrancy_insecure {
     // INSECURE
     mapping (address => uint) private userBalances;
 
+    function addToBalance() payable {
+        userBalances[msg.sender] += msg.value;
+    }
+
     function withdrawBalance() public {
         uint amountToWithdraw = userBalances[msg.sender];
         // <yes> <report> REENTRANCY

@@ -50,7 +50,7 @@ pragma solidity ^0.4.0;
     }
 
     //Fallback function
-    function() {
+    function() payable {
         init();
     }
 

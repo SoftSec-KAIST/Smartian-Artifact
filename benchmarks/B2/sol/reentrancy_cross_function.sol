@@ -11,6 +11,10 @@ contract Reentrancy_cross_function {
     // INSECURE
     mapping (address => uint) private userBalances;
 
+    function addToBalance() payable {
+        userBalances[msg.sender] += msg.value;
+    }
+
     function transfer(address to, uint amount) {
         if (userBalances[msg.sender] >= amount) {
             userBalances[to] += amount;

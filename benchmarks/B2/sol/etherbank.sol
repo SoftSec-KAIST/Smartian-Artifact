@@ -11,7 +11,7 @@ contract EtherBank{
 		return userBalances[user];
 	}
 
-	function addToBalance() {  
+	function addToBalance() payable {
 		userBalances[msg.sender] += msg.value;
 	}
 

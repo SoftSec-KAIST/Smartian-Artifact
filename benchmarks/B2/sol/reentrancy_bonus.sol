@@ -28,4 +28,6 @@ contract Reentrancy_bonus{
         withdrawReward(recipient); // At this point, the caller will be able to execute getFirstWithdrawalBonus again.
         claimedBonus[recipient] = true;
     }
+
+    function () payable { }
 }
