@@ -1,0 +1,292 @@
+diff --git a/mythril/analysis/module/modules/dependence_on_predictable_vars.py b/mythril/analysis/module/modules/dependence_on_predictable_vars.py
+index 821df7de..3fa31cf6 100644
+--- a/mythril/analysis/module/modules/dependence_on_predictable_vars.py
++++ b/mythril/analysis/module/modules/dependence_on_predictable_vars.py
+@@ -7,11 +7,12 @@ from mythril.analysis.module.base import DetectionModule, EntryPoint
+ from mythril.analysis.report import Issue
+ from mythril.exceptions import UnsatError
+ from mythril.analysis import solver
+-from mythril.laser.smt import ULT, symbol_factory
++from mythril.laser.smt import Function, ULT, symbol_factory
+ from mythril.analysis.swc_data import TIMESTAMP_DEPENDENCE, WEAK_RANDOMNESS
+ from mythril.analysis.module.module_helpers import is_prehook
+ from mythril.laser.ethereum.state.global_state import GlobalState
+ from mythril.laser.ethereum.state.annotation import StateAnnotation
++from mythril.support.running_time import dump_bug
+ from typing import cast, List
+ 
+ log = logging.getLogger(__name__)
+@@ -114,6 +115,9 @@ class PredictableVariables(DetectionModule):
+                             else WEAK_RANDOMNESS
+                         )
+ 
++                        # Will compare BD alarms at contract level, so report 0 as program counter.
++                        dump_bug('BlockstateDependency', 0, transaction_sequence)
++
+                         issue = Issue(
+                             contract=state.environment.active_account.contract_name,
+                             function_name=state.environment.active_function_name,
+diff --git a/mythril/analysis/module/modules/integer.py b/mythril/analysis/module/modules/integer.py
+index d042061f..7d5183ff 100644
+--- a/mythril/analysis/module/modules/integer.py
++++ b/mythril/analysis/module/modules/integer.py
+@@ -10,6 +10,7 @@ from mythril.exceptions import UnsatError
+ from mythril.laser.ethereum.state.global_state import GlobalState
+ from mythril.laser.ethereum.state.annotation import StateAnnotation
+ from mythril.analysis.module.base import DetectionModule, EntryPoint
++from mythril.support.running_time import dump_bug
+ from copy import copy
+ 
+ from mythril.laser.smt import (
+@@ -306,6 +307,8 @@ class IntegerArithmetics(DetectionModule):
+             "SafeMath library for integer arithmetic operations. "
+             "Refer to the transaction trace generated for this issue to reproduce the issue."
+ 
++            dump_bug('IntegerBug', ostate.get_current_instruction()['address'], transaction_sequence)
++
+             issue = Issue(
+                 contract=ostate.environment.active_account.contract_name,
+                 function_name=ostate.environment.active_function_name,
+diff --git a/mythril/analysis/module/modules/unchecked_retval.py b/mythril/analysis/module/modules/unchecked_retval.py
+index 5683f0ec..ce83a52f 100644
+--- a/mythril/analysis/module/modules/unchecked_retval.py
++++ b/mythril/analysis/module/modules/unchecked_retval.py
+@@ -13,6 +13,8 @@ from mythril.laser.smt.bitvec import BitVec
+ from mythril.laser.ethereum.state.annotation import StateAnnotation
+ from mythril.laser.ethereum.state.global_state import GlobalState
+ 
++from mythril.support.running_time import dump_bug
++
+ import logging
+ 
+ log = logging.getLogger(__name__)
+@@ -98,6 +100,9 @@ class UncheckedRetval(DetectionModule):
+                     "For example it is often desirable to wrap external calls in require() so the transaction is reverted if the call fails."
+                 )
+ 
++                # Will compare ME alarms at contract level, so report 0 as program counter.
++                dump_bug('MishandledException', 0, transaction_sequence)
++
+                 issue = Issue(
+                     contract=state.environment.active_account.contract_name,
+                     function_name=state.environment.active_function_name,
+diff --git a/mythril/analysis/potential_issues.py b/mythril/analysis/potential_issues.py
+index 6d9159b8..7b216340 100644
+--- a/mythril/analysis/potential_issues.py
++++ b/mythril/analysis/potential_issues.py
+@@ -3,6 +3,8 @@ from mythril.analysis.solver import get_transaction_sequence
+ from mythril.exceptions import UnsatError
+ from mythril.laser.ethereum.state.annotation import StateAnnotation
+ from mythril.laser.ethereum.state.global_state import GlobalState
++from mythril.analysis.swc_data import REENTRANCY
++from mythril.support.running_time import dump_bug
+ 
+ 
+ class PotentialIssue:
+@@ -89,6 +91,10 @@ def check_potential_issues(state: GlobalState) -> None:
+         except UnsatError:
+             continue
+ 
++        if potential_issue.swc_id == REENTRANCY:
++            # Will compare RE alarms at contract level, so report 0 as program counter.
++            dump_bug('Reentrancy', 0, transaction_sequence)
++
+         annotation.potential_issues.remove(potential_issue)
+         potential_issue.detector.cache.add(potential_issue.address)
+         potential_issue.detector.issues.append(
+diff --git a/mythril/analysis/solver.py b/mythril/analysis/solver.py
+index e2abe169..b7cf4ea7 100644
+--- a/mythril/analysis/solver.py
++++ b/mythril/analysis/solver.py
+@@ -150,6 +150,8 @@ def _replace_with_actual_sha(
+             tx["input"] = tx["input"][:s_index] + tx["input"][s_index:].replace(
+                 tx["input"][i : 64 + i], hex_keccak
+             )
++        if code is not None and code.bytecode in tx["input"]:
++            tx["input"] = tx["input"][:2] + tx["input"][s_index:]
+ 
+ 
+ def _get_concrete_state(initial_accounts: Dict, min_price_dict: Dict[str, int]):
+@@ -188,6 +190,11 @@ def _get_concrete_transaction(model: z3.Model, transaction: BaseTransaction):
+         ]
+     )
+ 
++    bn = symbol_factory.BitVecSym("block_number", 256)
++    bn_value = model[bn.raw]
++    ts = symbol_factory.BitVecSym("timestamp", 256)
++    ts_value = model[ts.raw]
++
+     # Create concrete transaction dict
+     concrete_transaction = dict()  # type: Dict[str, str]
+     concrete_transaction["input"] = "0x" + input_
+@@ -195,6 +202,10 @@ def _get_concrete_transaction(model: z3.Model, transaction: BaseTransaction):
+     # Fixme: base origin assignment on origin symbol
+     concrete_transaction["origin"] = caller
+     concrete_transaction["address"] = "%s" % address
++    if bn_value is not None:
++        concrete_transaction["number"] = "%d" % bn_value.as_long()
++    if ts_value is not None:
++        concrete_transaction["timestamp"] = "%d" % ts_value.as_long()
+ 
+     return concrete_transaction
+ 
+diff --git a/mythril/interfaces/cli.py b/mythril/interfaces/cli.py
+index dd1e179e..2c5fceba 100644
+--- a/mythril/interfaces/cli.py
++++ b/mythril/interfaces/cli.py
+@@ -31,6 +31,7 @@ from mythril.mythril import (
+     MythrilLevelDB,
+ )
+ 
++from mythril.support.running_time import RunningTime
+ from mythril.analysis.module import ModuleLoader
+ 
+ from mythril.__version__ import __version__ as VERSION
+@@ -749,6 +750,7 @@ def execute_command(
+                 exit_with_error(args.outform, "Error saving json: " + str(e))
+ 
+         else:
++            RunningTime()
+             try:
+                 report = analyzer.fire_lasers(
+                     modules=[m.strip() for m in args.modules.strip().split(",")]
+diff --git a/mythril/laser/ethereum/svm.py b/mythril/laser/ethereum/svm.py
+index 352e5a6a..7a120f66 100644
+--- a/mythril/laser/ethereum/svm.py
++++ b/mythril/laser/ethereum/svm.py
+@@ -6,6 +6,7 @@ from datetime import datetime, timedelta
+ from typing import Callable, Dict, DefaultDict, List, Tuple, Optional
+ 
+ from mythril.support.opcodes import opcodes as OPCODES
++from mythril.analysis.solver import get_transaction_sequence
+ from mythril.analysis.potential_issues import check_potential_issues
+ from mythril.laser.execution_info import ExecutionInfo
+ from mythril.laser.ethereum.cfg import NodeFlags, Node, Edge, JumpType
+@@ -29,6 +30,9 @@ from mythril.laser.ethereum.transaction import (
+ )
+ from mythril.laser.smt import symbol_factory
+ from mythril.support.support_args import args
++from mythril.support.running_time import RunningTime
++from time import time
++import sys, json
+ 
+ log = logging.getLogger(__name__)
+ 
+@@ -114,6 +118,7 @@ class LaserEVM:
+             self.instr_pre_hook[op] = []
+             self.instr_post_hook[op] = []
+         log.info("LASER EVM initialized with dynamic loader: " + str(dynamic_loader))
++        self.tx_set = set()
+ 
+     def extend_strategy(self, extension: ABCMeta, *args) -> None:
+         self.strategy = extension(self.strategy, args)
+@@ -300,6 +305,26 @@ class LaserEVM:
+             )
+         return new_global_states
+ 
++    def txhash(self, tx):
++        s = ''
++        state = tx['initialState']
++        accounts = state['accounts']
++        for addr in accounts:
++            account = accounts[addr]
++            s += addr
++            s += account['balance']
++        steps = tx['steps']
++        for step in steps:
++            s += step['origin']
++            s += step['address']
++            s += step['input']
++        return s
++
++    def dumpTC(self, tx):
++        elapsed = time() - RunningTime().global_running_start
++        with open('/home/test/mythril-workspace/output/tc_%0.5f' % elapsed, 'w') as f:
++            f.write(json.dumps(tx))
++
+     def execute_state(
+         self, global_state: GlobalState
+     ) -> Tuple[List[GlobalState], Optional[str]]:
+@@ -310,7 +335,16 @@ class LaserEVM:
+         """
+         # Execute hooks
+         for hook in self._execute_state_hooks:
+-            hook(global_state)
++            ret = hook(global_state)
++            if ret:
++                try:
++                    tx = get_transaction_sequence(global_state, global_state.world_state.constraints)
++                    h = self.txhash(tx)
++                    if h not in self.tx_set:
++                        self.tx_set.add(h)
++                        self.dumpTC(tx)
++                except:
++                    pass
+ 
+         instructions = global_state.environment.code.instruction_list
+         try:
+diff --git a/mythril/laser/plugin/plugins/coverage/coverage_plugin.py b/mythril/laser/plugin/plugins/coverage/coverage_plugin.py
+index b9f1009c..b0c05e1f 100644
+--- a/mythril/laser/plugin/plugins/coverage/coverage_plugin.py
++++ b/mythril/laser/plugin/plugins/coverage/coverage_plugin.py
+@@ -59,6 +59,7 @@ class InstructionCoveragePlugin(LaserPlugin):
+ 
+         @symbolic_vm.laser_hook("execute_state")
+         def execute_state_hook(global_state: GlobalState):
++            cov_before = self._get_covered_instructions()
+             # Record coverage
+             code = global_state.environment.code.bytecode
+ 
+@@ -72,6 +73,8 @@ class InstructionCoveragePlugin(LaserPlugin):
+                 )
+ 
+             self.coverage[code][1][global_state.mstate.pc] = True
++            cov_after = self._get_covered_instructions()
++            return cov_before != cov_after
+ 
+         @symbolic_vm.laser_hook("start_sym_trans")
+         def execute_start_sym_trans_hook():
+diff --git a/mythril/support/running_time.py b/mythril/support/running_time.py
+index e69de29b..e408a32f 100644
+--- a/mythril/support/running_time.py
++++ b/mythril/support/running_time.py
+@@ -0,0 +1,39 @@
++from time import time
++import json
++from mythril.support.support_utils import Singleton
++
++
++class RunningTime(metaclass=Singleton):
++    """Maintains the start time of the current contract in execution"""
++
++    def __init__(self):
++        self.global_running_start = time()
++
++def sig_to_tag(sig):
++    if sig == 'BlockstateDependency':
++        return 'BD'
++    elif sig == 'IntegerBug':
++        return 'IB'
++    elif sig == 'MishandledException':
++        return 'ME'
++    elif sig == 'Reentrancy':
++        return 'RE'
++    else:
++        return 'XX'
++
++def dump_bug(sig, pc, tx):
++    elapsed = time() - RunningTime().global_running_start
++    s = int(elapsed)
++    d = s // 86400
++    s = s - (d * 86400)
++    h = s // 3600
++    s = s - (h * 3600)
++    m = s // 60
++    s = s - (m * 60)
++    time_str = '%02d:%02d:%02d:%02d' % (d, h, m, s)
++    msg = '[%s] Found %s at %x\n'
++    with open('/home/test/mythril-workspace/output/log.txt', 'a+') as f:
++        f.write(msg % (time_str, sig, pc))
++    tag = sig_to_tag(sig)
++    with open('/home/test/mythril-workspace/output/bugs/%s_%0.5f' % (tag, elapsed), 'w') as f:
++        f.write(json.dumps(tx))

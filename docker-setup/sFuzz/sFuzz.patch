@@ -1,0 +1,676 @@
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index e48a9dc9b..140e32c2a 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -39,8 +39,8 @@ option(HUNTER_RUN_UPLOAD "Upload binaries to the cache server" ${run_upload})
+ 
+ include(HunterGate)
+ HunterGate(
+-    URL "https://github.com/ruslo/hunter/archive/v0.21.16.tar.gz"
+-    SHA1 "aa1faccd24f33dd2c368f85a4e9ca2e5d9c249cb"
++    URL "http://softsec.kaist.ac.kr/~soomink/tmp/v0.21.16.tar.gz"
++    SHA1 "bbbaf5385efe15f9c098a3263aaf44cce9279859"
+     LOCAL
+ )
+ 
+diff --git a/fuzzer/Utils.h b/fuzzer/Utils.h
+index 3aa848702..f6c8cc85a 100644
+--- a/fuzzer/Utils.h
++++ b/fuzzer/Utils.h
+@@ -114,7 +114,7 @@ string compileSolFiles(string folder) {
+   return ret.str();
+ }
+ 
+-string fuzzJsonFiles(string contracts, string assets, int duration, int mode, int reporter, string attackerName) {
++string fuzzJsonFiles(string contracts, string assets, int duration, int mode, int reporter, string attackerName, string tcDir, string vulnLog) {
+   stringstream ret;
+   unordered_set<string> contractNames;
+   /* search for sol file */
+@@ -131,6 +131,8 @@ string fuzzJsonFiles(string contracts, string assets, int duration, int mode, in
+     ret << " --mode " + to_string(mode);
+     ret << " --reporter " + to_string(reporter);
+     ret << " --attacker " + attackerName;
++    ret << " --tcdir " + tcDir;
++    ret << " --vulnlog " + vulnLog;
+     ret << endl;
+   });
+   return ret.str();
+diff --git a/fuzzer/main.cpp b/fuzzer/main.cpp
+index c88449717..c3dbb0fea 100644
+--- a/fuzzer/main.cpp
++++ b/fuzzer/main.cpp
+@@ -1,4 +1,5 @@
+ #include <iostream>
++#include <fstream>
+ #include <libfuzzer/Fuzzer.h>
+ #include "Utils.h"
+ 
+@@ -12,6 +13,8 @@ static int DEFAULT_ANALYZING_INTERVAL = 5; // 5 sec
+ static string DEFAULT_CONTRACTS_FOLDER = "contracts/";
+ static string DEFAULT_ASSETS_FOLDER = "assets/";
+ static string DEFAULT_ATTACKER = "ReentrancyAttacker";
++static string DEFAULT_TC_DIR = "output/";
++static string DEFAULT_VULN_LOG = "output/log.txt";
+ 
+ int main(int argc, char* argv[]) {
+   /* Run EVM silently */
+@@ -28,6 +31,8 @@ int main(int argc, char* argv[]) {
+   string contractName = "";
+   string sourceFile = "";
+   string attackerName = DEFAULT_ATTACKER;
++  string tcDir = DEFAULT_TC_DIR;
++  string vulnLog = DEFAULT_VULN_LOG;
+   po::options_description desc("Allowed options");
+   po::variables_map vm;
+   
+@@ -42,7 +47,9 @@ int main(int argc, char* argv[]) {
+     ("mode,m", po::value(&mode), "choose mode: 0 - AFL ")
+     ("reporter,r", po::value(&reporter), "choose reporter: 0 - TERMINAL | 1 - JSON")
+     ("duration,d", po::value(&duration), "fuzz duration")
+-    ("attacker", po::value(&attackerName), "choose attacker: NormalAttacker | ReentrancyAttacker");
++    ("attacker", po::value(&attackerName), "choose attacker: NormalAttacker | ReentrancyAttacker")
++    ("tcdir", po::value(&tcDir), "test directory path")
++    ("vulnlog", po::value(&vulnLog), "vulnerability directory path");
+   po::store(po::parse_command_line(argc, argv, desc), vm);
+   po::notify(vm);
+   /* Show help message */
+@@ -53,7 +60,7 @@ int main(int argc, char* argv[]) {
+     fuzzMe << "#!/bin/bash" << endl;
+     fuzzMe << compileSolFiles(contractsFolder);
+     fuzzMe << compileSolFiles(assetsFolder);
+-    fuzzMe << fuzzJsonFiles(contractsFolder, assetsFolder, duration, mode, reporter, attackerName);
++    fuzzMe << fuzzJsonFiles(contractsFolder, assetsFolder, duration, mode, reporter, attackerName, tcDir, vulnLog);
+     fuzzMe.close();
+     showGenerate();
+     return 0;
+@@ -69,7 +76,10 @@ int main(int argc, char* argv[]) {
+     fuzzParam.reporter = (Reporter) reporter;
+     fuzzParam.analyzingInterval = DEFAULT_ANALYZING_INTERVAL;
+     fuzzParam.attackerName = attackerName;
+-    Fuzzer fuzzer(fuzzParam);
++    fuzzParam.tcDir = tcDir;
++    std::ofstream vl(vulnLog);
++    vl.rdbuf()->pubsetbuf(0, 0);
++    Fuzzer fuzzer(fuzzParam, vl);
+     cout << ">> Fuzz " << contractName << endl;
+     fuzzer.start();
+     return 0;
+diff --git a/libethereum/Transaction.h b/libethereum/Transaction.h
+index 74ed3a50b..b8fd02cb2 100644
+--- a/libethereum/Transaction.h
++++ b/libethereum/Transaction.h
+@@ -66,6 +66,19 @@ struct VMException;
+ TransactionException toTransactionException(Exception const& _e);
+ std::ostream& operator<<(std::ostream& _out, TransactionException const& _er);
+ 
++struct TxInfo
++{
++	Address contractAddr;
++	u160 sender;
++	u256 value;
++	u256 gasPrice;
++	u256 gas;
++	bytes data;
++	u256 nonce;
++	int64_t blockNumber;
++	int64_t timestamp;
++};
++
+ /// Description of the result of executing a transaction.
+ struct ExecutionResult
+ {
+@@ -77,6 +90,7 @@ struct ExecutionResult
+ 	u256 gasRefunded = 0;
+ 	unsigned depositSize = 0; 										///< Amount of code of the creation's attempted deposit.
+ 	u256 gasForDeposit; 											///< Amount of gas remaining for the code deposit phase.
++	TxInfo *txInfo;
+ };
+ 
+ std::ostream& operator<<(std::ostream& _out, ExecutionResult const& _er);
+diff --git a/libfuzzer/Fuzzer.cpp b/libfuzzer/Fuzzer.cpp
+index cfd2e420a..3beba5ade 100644
+--- a/libfuzzer/Fuzzer.cpp
++++ b/libfuzzer/Fuzzer.cpp
+@@ -14,7 +14,7 @@ using namespace fuzzer;
+ namespace pt = boost::property_tree;
+ 
+ /* Setup virgin byte to 255 */
+-Fuzzer::Fuzzer(FuzzParam fuzzParam): fuzzParam(fuzzParam){
++Fuzzer::Fuzzer(FuzzParam fuzzParam, std::ofstream &vulnLog): fuzzParam(fuzzParam), vulnLog(vulnLog) {
+   fill_n(fuzzStat.stageFinds, 32, 0);
+ }
+ 
+@@ -144,13 +144,134 @@ void Fuzzer::writeStats(const Mutation &mutation) {
+   stats.close();
+ }
+ 
++string dumpBytes(bytes data) {
++  string bs = "";
++  for (auto it = data.begin(); it != data.end(); it++) {
++    char buf[8];
++    sprintf(buf, "%02x", *it);
++    string s = buf;
++    bs += s;
++  }
++  return bs;
++}
++
++void dumpTxInfo(std::ofstream &stream, TxInfo *txInfo, std::string attackerName) {
++  stream << "Dump Transaction" << endl;
++  stream << txInfo->contractAddr.hex() << endl;
++  stream << toString(txInfo->sender) << endl;
++  stream << toString(txInfo->value) << endl;
++  stream << toString(txInfo->gasPrice) << endl;
++  stream << toString(txInfo->gas) << endl;
++  stream << dumpBytes(txInfo->data) << endl;
++  stream << toString(txInfo->nonce) << endl;
++  stream << txInfo->blockNumber << endl;
++  stream << txInfo->timestamp << endl;
++  stream << attackerName << endl;
++}
++
++void dumpAccounts(std::ofstream &stream, Accounts accounts) {
++  for (auto it = accounts.begin(); it != accounts.end(); it++) {
++    stream << "Dump Account" << endl;
++    stream << toString(get<1>(*it)) << endl;
++    stream << toString(get<2>(*it)) << endl;
++    stream << get<3>(*it) << endl;
++  }
++}
++
++void Fuzzer::dumpTC(TargetContainerResult res, bytes data, double time) {
++  char buf[100];
++  snprintf(buf, sizeof(buf), "%stc_%.5f", fuzzParam.tcDir.c_str(), time);
++  string filename = buf;
++  std::ofstream tc(filename);
++  dumpAccounts(tc, res.accounts);
++  dumpTxInfo(tc, res.conTxInfo, fuzzParam.attackerName);
++  for (auto it = res.txInfos.begin(); it != res.txInfos.end(); it++) {
++    dumpTxInfo(tc, *it, fuzzParam.attackerName);
++  }
++  tc.close();
++}
++
++void printVuln(double time, uint64_t pc, char *sig, std::ofstream &vulnLog) {
++  char buf[100];
++  int d, h, m, s;
++  d = h = m = s = 0;
++  s = time;
++  d = s / 86400;
++  s -= (d * 86400);
++  h = s / 3600;
++  s -= (h * 3600);
++  m = s / 60;
++  s -= (m * 60);
++  snprintf(buf, sizeof(buf), "[%02i:%02i:%02i:%02i] Found %s at ", d, h, m, s, sig);
++  string str = buf;
++  vulnLog << str << hex << pc << endl;
++}
++
++void Fuzzer::dumpVuln(TargetContainerResult tcRes, double time) {
++  for (auto it = tcRes.overflows.begin(); it != tcRes.overflows.end(); it++) {
++    auto finder = overflows.find(*it);
++    if (finder == overflows.end()) {
++      uint64_t pc = static_cast<uint64_t> (*it);
++      printVuln(time, pc, "IntegerBug", vulnLog);
++      overflows.insert(*it);
++    }
++  }
++  for (auto it = tcRes.underflows.begin(); it != tcRes.underflows.end(); it++) {
++    auto finder = underflows.find(*it);
++    if (finder == underflows.end()) {
++      char buf[100];
++      uint64_t pc = static_cast<uint64_t> (*it);
++      printVuln(time, pc, "IntegerBug", vulnLog);
++      underflows.insert(*it);
++    }
++  }
++  for (auto it = tcRes.mes.begin(); it != tcRes.mes.end(); it++) {
++    auto finder = mes.find(*it);
++    if (finder == mes.end()) {
++      char buf[100];
++      uint64_t pc = static_cast<uint64_t> (*it);
++      printVuln(time, 0, "MishandledException", vulnLog);
++      mes.insert(*it);
++    }
++  }
++  for (auto it = tcRes.tds.begin(); it != tcRes.tds.end(); it++) {
++    auto finder = tds.find(*it);
++    if (finder == tds.end()) {
++      char buf[100];
++      uint64_t pc = static_cast<uint64_t> (*it);
++      printVuln(time, 0, "BlockstateDependency", vulnLog);
++      tds.insert(*it);
++    }
++  }
++  for (auto it = tcRes.bds.begin(); it != tcRes.bds.end(); it++) {
++    auto finder = bds.find(*it);
++    if (finder == bds.end()) {
++      char buf[100];
++      uint64_t pc = static_cast<uint64_t> (*it);
++      printVuln(time, 0, "BlockstateDependency", vulnLog);
++      bds.insert(*it);
++    }
++  }
++  for (auto it = tcRes.res.begin(); it != tcRes.res.end(); it++) {
++    auto finder = res.find(*it);
++    if (finder == res.end()) {
++      char buf[100];
++      uint64_t pc = static_cast<uint64_t> (*it);
++      printVuln(time, 0, "Reentrancy", vulnLog);
++      res.insert(*it);
++    }
++  }
++}
++
+ /* Save data if interest */
+-FuzzItem Fuzzer::saveIfInterest(TargetExecutive& te, bytes data, uint64_t depth, const tuple<unordered_set<uint64_t>, unordered_set<uint64_t>>& validJumpis) {
++FuzzItem Fuzzer::saveIfInterest(TargetExecutive& te, bytes data, uint64_t depth, const tuple<unordered_set<uint64_t>, unordered_set<uint64_t>>& validJumpis, bool isMutated) {
+   auto revisedData = ContractABI::postprocessTestData(data);
+   FuzzItem item(revisedData);
+-  item.res = te.exec(revisedData, validJumpis);
++  item.res = te.exec(revisedData, validJumpis, isMutated);
+   //Logger::debug(Logger::testFormat(item.data));
+   fuzzStat.totalExecs ++;
++  bool hasNewCov = false;
++  double elapsed = timer.elapsed();
+   for (auto tracebit: item.res.tracebits) {
+     if (!tracebits.count(tracebit)) {
+       // Remove leader
+@@ -166,6 +287,7 @@ FuzzItem Fuzzer::saveIfInterest(TargetExecutive& te, bytes data, uint64_t depth,
+       fuzzStat.lastNewPath = timer.elapsed();
+       Logger::debug("Cover new branch "  + tracebit);
+       Logger::debug(Logger::testFormat(item.data));
++      hasNewCov = true;
+     }
+   }
+   for (auto predicateIt: item.res.predicates) {
+@@ -198,11 +320,14 @@ FuzzItem Fuzzer::saveIfInterest(TargetExecutive& te, bytes data, uint64_t depth,
+       Logger::debug("Found new uncovered branch");
+       Logger::debug("now: " + predicateIt.second.str());
+       Logger::debug(Logger::testFormat(item.data));
++      hasNewCov = true;
+     }
+   }
+   updateExceptions(item.res.uniqExceptions);
+   updateTracebits(item.res.tracebits);
+   updatePredicates(item.res.predicates);
++  dumpVuln(item.res, elapsed);
++  if (hasNewCov) dumpTC(item.res, revisedData, elapsed);
+   return item;
+ }
+ 
+@@ -273,7 +398,7 @@ void Fuzzer::start() {
+         cout << "No valid jumpi" << endl;
+         stop();
+       }
+-      saveIfInterest(executive, ca.randomTestcase(), 0, validJumpis);
++      saveIfInterest(executive, ca.randomTestcase(), 0, validJumpis, false);
+       int originHitCount = leaders.size();
+       // No branch
+       if (!originHitCount) {
+@@ -318,7 +443,7 @@ void Fuzzer::start() {
+         }
+         Mutation mutation(curItem, make_tuple(codeDict, addressDict));
+         auto save = [&](bytes data) {
+-          auto item = saveIfInterest(executive, data, curItem.depth, validJumpis);
++          auto item = saveIfInterest(executive, data, curItem.depth, validJumpis, true);
+           /* Show every one second */
+           u64 duration = timer.elapsed();
+           if (!showSet.count(duration)) {
+diff --git a/libfuzzer/Fuzzer.h b/libfuzzer/Fuzzer.h
+index 667d67466..60df233b8 100644
+--- a/libfuzzer/Fuzzer.h
++++ b/libfuzzer/Fuzzer.h
+@@ -32,6 +32,7 @@ namespace fuzzer {
+     int duration;
+     int analyzingInterval;
+     string attackerName;
++    string tcDir;
+   };
+   struct FuzzStat {
+     int idx = 0;
+@@ -58,13 +59,22 @@ namespace fuzzer {
+     unordered_map<uint64_t, string> snippets;
+     unordered_set<string> uniqExceptions;
+     Timer timer;
++    set<u256> overflows;
++    set<u256> underflows;
++    set<u256> mes;
++    set<u256> tds;
++    set<u256> bds;
++    set<u256> res;
+     FuzzParam fuzzParam;
+     FuzzStat fuzzStat;
+     void writeStats(const Mutation &mutation);
+     ContractInfo mainContract();
++    std::ofstream &vulnLog;
+     public:
+-      Fuzzer(FuzzParam fuzzParam);
+-      FuzzItem saveIfInterest(TargetExecutive& te, bytes data, uint64_t depth, const tuple<unordered_set<uint64_t>, unordered_set<uint64_t>> &validJumpis);
++      Fuzzer(FuzzParam fuzzParam, std::ofstream &vulnLog);
++      void dumpTC(TargetContainerResult res, bytes data, double time);
++      void dumpVuln(TargetContainerResult res, double time);
++      FuzzItem saveIfInterest(TargetExecutive& te, bytes data, uint64_t depth, const tuple<unordered_set<uint64_t>, unordered_set<uint64_t>> &validJumpis, bool isMutated);
+       void showStats(const Mutation &mutation, const tuple<unordered_set<uint64_t>, unordered_set<uint64_t>> &validJumpis);
+       void updateTracebits(unordered_set<string> tracebits);
+       void updatePredicates(unordered_map<string, u256> predicates);
+diff --git a/libfuzzer/TargetContainerResult.h b/libfuzzer/TargetContainerResult.h
+index 0d3fd2843..3628a5e74 100644
+--- a/libfuzzer/TargetContainerResult.h
++++ b/libfuzzer/TargetContainerResult.h
+@@ -8,6 +8,8 @@ using namespace eth;
+ using namespace std;
+ 
+ namespace fuzzer {
++  using Accounts = vector<tuple<bytes, u160, u256, bool>>;
++
+   struct TargetContainerResult {
+     TargetContainerResult() {}
+     TargetContainerResult(
+@@ -25,5 +27,14 @@ namespace fuzzer {
+     unordered_set<string> uniqExceptions;
+     /* Contains checksum of tracebits */
+     string cksum;
++    Accounts accounts;
++    TxInfo *conTxInfo;
++    vector<TxInfo *> txInfos;
++    set<u256> overflows;
++    set<u256> underflows;
++    set<u256> mes;
++    set<u256> tds;
++    set<u256> bds;
++    set<u256> res;
+   };
+ }
+diff --git a/libfuzzer/TargetExecutive.cpp b/libfuzzer/TargetExecutive.cpp
+index c84c736fb..5e89d6ebe 100644
+--- a/libfuzzer/TargetExecutive.cpp
++++ b/libfuzzer/TargetExecutive.cpp
+@@ -7,10 +7,10 @@ namespace fuzzer {
+     program->deploy(addr, bytes{code});
+     program->setBalance(addr, DEFAULT_BALANCE);
+     program->updateEnv(ca.decodeAccounts(), ca.decodeBlock());
+-    program->invoke(addr, CONTRACT_CONSTRUCTOR, ca.encodeConstructor(), ca.isPayable(""), onOp);
++    program->invoke(addr, CONTRACT_CONSTRUCTOR, ca.encodeConstructor(), ca.isPayable(""), onOp, false);
+   }
+ 
+-  TargetContainerResult TargetExecutive::exec(bytes data, const tuple<unordered_set<uint64_t>, unordered_set<uint64_t>>& validJumpis) {
++  TargetContainerResult TargetExecutive::exec(bytes data, const tuple<unordered_set<uint64_t>, unordered_set<uint64_t>>& validJumpis, bool isMutated) {
+     /* Save all hit branches to trace_bits */
+     Instruction prevInst;
+     RecordParam recordParam;
+@@ -67,9 +67,15 @@ namespace fuzzer {
+                 auto total256 = left + right;
+                 auto total512 = (u512) left + (u512) right;
+                 payload.isOverflow = total512 != total256;
++		if (total512 != total256) {
++		  oracleFactory->dumpOverflow(pc);
++		}
+               }
+               if (inst == Instruction::SUB) {
+                 payload.isUnderflow = left < right;
++		if (left < right) {
++		  oracleFactory->dumpUnderflow(pc);
++		}
+               }
+             }
+             oracleFactory->save(OpcodeContext(ext->depth + 1, payload));
+@@ -134,7 +140,8 @@ namespace fuzzer {
+     payload.caller = sender;
+     payload.callee = addr;
+     oracleFactory->save(OpcodeContext(0, payload));
+-    auto res = program->invoke(addr, CONTRACT_CONSTRUCTOR, ca.encodeConstructor(), ca.isPayable(""), onOp);
++    auto res = program->invoke(addr, CONTRACT_CONSTRUCTOR, ca.encodeConstructor(), ca.isPayable(""), onOp, isMutated);
++    auto conTxInfo = res.txInfo;
+     if (res.excepted != TransactionException::None) {
+       auto exceptionId = to_string(recordParam.lastpc);
+       uniqExceptions.insert(exceptionId) ;
+@@ -144,6 +151,7 @@ namespace fuzzer {
+       oracleFactory->save(OpcodeContext(0, payload));
+     }
+     oracleFactory->finalize();
++    TxInfo *tis[funcs.size()];
+     for (uint32_t funcIdx = 0; funcIdx < funcs.size(); funcIdx ++ ) {
+       /* Update payload */
+       auto func = funcs[funcIdx];
+@@ -157,7 +165,8 @@ namespace fuzzer {
+       payload.caller = sender;
+       payload.callee = addr;
+       oracleFactory->save(OpcodeContext(0, payload));
+-      res = program->invoke(addr, CONTRACT_FUNCTION, func, ca.isPayable(fd.name), onOp);
++      res = program->invoke(addr, CONTRACT_FUNCTION, func, ca.isPayable(fd.name), onOp, isMutated);
++      tis[funcIdx] = res.txInfo;
+       outputs.push_back(res.output);
+       if (res.excepted != TransactionException::None) {
+         auto exceptionId = to_string(recordParam.lastpc);
+@@ -173,6 +182,18 @@ namespace fuzzer {
+     program->rollback(savepoint);
+     string cksum = "";
+     for (auto t : tracebits) cksum = cksum + t;
+-    return TargetContainerResult(tracebits, predicates, uniqExceptions, cksum);
++    auto tcRes = TargetContainerResult(tracebits, predicates, uniqExceptions, cksum);
++    tcRes.accounts = ca.decodeAccounts();
++    tcRes.conTxInfo = conTxInfo;
++    for (uint32_t funcIdx = 0; funcIdx < funcs.size(); funcIdx++) {
++      tcRes.txInfos.push_back(tis[funcIdx]);
++    }
++    tcRes.overflows = oracleFactory->overflows;
++    tcRes.underflows = oracleFactory->underflows;
++    tcRes.mes = oracleFactory->mes;
++    tcRes.tds = oracleFactory->tds;
++    tcRes.bds = oracleFactory->bds;
++    tcRes.res = oracleFactory->res;
++    return tcRes;
+   }
+ }
+diff --git a/libfuzzer/TargetExecutive.h b/libfuzzer/TargetExecutive.h
+index 50c7bb79c..c6114e47f 100644
+--- a/libfuzzer/TargetExecutive.h
++++ b/libfuzzer/TargetExecutive.h
+@@ -31,7 +31,7 @@ namespace fuzzer {
+         this->program = program;
+         this->oracleFactory = oracleFactory;
+       }
+-      TargetContainerResult exec(bytes data, const tuple<unordered_set<uint64_t>, unordered_set<uint64_t>> &validJumpis);
++      TargetContainerResult exec(bytes data, const tuple<unordered_set<uint64_t>, unordered_set<uint64_t>> &validJumpis, bool isMutated);
+       void deploy(bytes data, OnOpFunc onOp);
+   };
+ }
+diff --git a/libfuzzer/TargetProgram.cpp b/libfuzzer/TargetProgram.cpp
+index d08f83b96..364e43f25 100644
+--- a/libfuzzer/TargetProgram.cpp
++++ b/libfuzzer/TargetProgram.cpp
+@@ -41,18 +41,18 @@ namespace fuzzer {
+     return state.code(addr);
+   }
+   
+-  ExecutionResult TargetProgram::invoke(Address addr, ContractCall type, bytes data, bool payable, OnOpFunc onOp) {
++  ExecutionResult TargetProgram::invoke(Address addr, ContractCall type, bytes data, bool payable, OnOpFunc onOp, bool isMutated) {
+     switch (type) {
+       case CONTRACT_CONSTRUCTOR: {
+         bytes code = state.code(addr);
+         code.insert(code.end(), data.begin(), data.end());
+         state.setCode(addr, bytes{code});
+-        ExecutionResult res = invoke(addr, data, payable, onOp);
++        ExecutionResult res = invoke(addr, data, payable, onOp, isMutated, true);
+         state.setCode(addr, bytes{res.output});
+         return res;
+       }
+       case CONTRACT_FUNCTION: {
+-        return invoke(addr, data, payable, onOp);
++        return invoke(addr, data, payable, onOp, isMutated, false);
+       }
+       default: {
+         throw "Unknown invoke type";
+@@ -60,12 +60,13 @@ namespace fuzzer {
+     }
+   }
+   
+-  ExecutionResult TargetProgram::invoke(Address addr, bytes data, bool payable, OnOpFunc onOp) {
++  ExecutionResult TargetProgram::invoke(Address addr, bytes data, bool payable, OnOpFunc onOp, bool isMutated, bool isConstructor) {
+     ExecutionResult res;
+     Address senderAddr(sender);
+     u256 value = payable ? state.balance(sender) / 2 : 0;
+     u256 gasPrice = 0;
+-    Transaction t = Transaction(value, gasPrice, gas, data, state.getNonce(sender));
++    auto nonce = state.getNonce(sender);
++    Transaction t = Transaction(value, gasPrice, gas, data, nonce);
+     t.forceSender(senderAddr);
+     Executive executive(state, *envInfo, *se);
+     executive.setResultRecipient(res);
+@@ -75,6 +76,16 @@ namespace fuzzer {
+     executive.updateBlock(blockNumber, timestamp);
+     executive.go(onOp);
+     executive.finalize();
++    res.txInfo = new TxInfo;
++    res.txInfo->contractAddr = addr;
++    res.txInfo->sender = sender;
++    res.txInfo->value = value;
++    res.txInfo->gasPrice = gasPrice;
++    res.txInfo->gas = gas;
++    res.txInfo->data = data;
++    res.txInfo->nonce = nonce;
++    res.txInfo->blockNumber = blockNumber;
++    res.txInfo->timestamp = timestamp;
+     return res;
+   }
+ 
+diff --git a/libfuzzer/TargetProgram.h b/libfuzzer/TargetProgram.h
+index 669204e8c..06221721f 100644
+--- a/libfuzzer/TargetProgram.h
++++ b/libfuzzer/TargetProgram.h
+@@ -19,7 +19,7 @@ namespace fuzzer {
+       u160 sender;
+       EnvInfo *envInfo;
+       SealEngineFace *se;
+-      ExecutionResult invoke(Address addr, bytes data, bool payable, OnOpFunc onOp);
++      ExecutionResult invoke(Address addr, bytes data, bool payable, OnOpFunc onOp, bool isMutated, bool isConstructor);
+     public:
+       TargetProgram();
+       ~TargetProgram();
+@@ -32,6 +32,6 @@ namespace fuzzer {
+       unordered_map<Address, u256> addresses();
+       size_t savepoint();
+       void rollback(size_t savepoint);
+-      ExecutionResult invoke(Address addr, ContractCall type, bytes data, bool payable, OnOpFunc onOp);
++      ExecutionResult invoke(Address addr, ContractCall type, bytes data, bool payable, OnOpFunc onOp, bool isMutated);
+   };
+ }
+diff --git a/liboracle/OracleFactory.cpp b/liboracle/OracleFactory.cpp
+index 73f4574ff..3ba92a377 100644
+--- a/liboracle/OracleFactory.cpp
++++ b/liboracle/OracleFactory.cpp
+@@ -17,6 +17,14 @@ void OracleFactory::save(OpcodeContext ctx) {
+   function.push_back(ctx);
+ }
+ 
++void OracleFactory::dumpOverflow(u256 pc) {
++  overflows.insert(pc);
++}
++
++void OracleFactory::dumpUnderflow(u256 pc) {
++  underflows.insert(pc);
++}
++
+ vector<bool> OracleFactory::analyze() {
+   uint8_t total = 9;
+   while (vulnerabilities.size() < total) {
+@@ -40,28 +48,42 @@ vector<bool> OracleFactory::analyze() {
+             auto rootCallResponse = function[function.size() - 1];
+             bool rootException = rootCallResponse.payload.inst == Instruction::INVALID && !rootCallResponse.level;
+             for (auto ctx : function) {
+-              vulnerabilities[i] = vulnerabilities[i] || (!rootException && ctx.payload.inst == Instruction::INVALID && ctx.level);
++              auto cond = !rootException && ctx.payload.inst == Instruction::INVALID && ctx.level;
++	      if (cond) mes.insert(ctx.payload.pc);
++              vulnerabilities[i] = vulnerabilities[i] || cond;
+             }
+             break;
+           }
+           case TIME_DEPENDENCY: {
+             auto has_transfer = false;
+             auto has_timestamp = false;
++	    u256 timestamp_pc;
+             for (auto ctx : function) {
+               has_transfer = has_transfer || ctx.payload.wei > 0;
+-              has_timestamp = has_timestamp || ctx.payload.inst == Instruction::TIMESTAMP;
++	      auto has_timestamp_cond = ctx.payload.inst == Instruction::TIMESTAMP;
++              has_timestamp = has_timestamp || has_timestamp_cond;
++	      if (has_transfer && ctx.payload.pc != 0) timestamp_pc = ctx.payload.pc;
+             }
+-            vulnerabilities[i] = has_transfer && has_timestamp;
++	    auto cond = has_transfer && has_timestamp;
++	    if (cond) {
++              tds.insert(timestamp_pc);
++	    }
++            vulnerabilities[i] = cond;
+             break;
+           }
+           case NUMBER_DEPENDENCY: {
+             auto has_transfer = false;
+             auto has_number = false;
++	    u256 number_pc;
+             for (auto ctx : function) {
+               has_transfer = has_transfer || ctx.payload.wei > 0;
+-              has_number = has_number || ctx.payload.inst == Instruction::NUMBER;
++	      auto has_number_cond = ctx.payload.inst == Instruction::NUMBER;
++              has_number = has_number || has_number_cond;
++	      if (has_transfer && ctx.payload.pc != 0) number_pc = ctx.payload.pc;
+             }
+-            vulnerabilities[i] = has_transfer && has_number;
++	    auto cond = has_transfer && has_number;
++	    if (cond) bds.insert(number_pc);
++            vulnerabilities[i] = cond;
+             break;
+           }
+           case DELEGATE_CALL: {
+@@ -81,16 +103,26 @@ vector<bool> OracleFactory::analyze() {
+           case REENTRANCY: {
+             auto has_loop = false;
+             auto has_transfer = false;
++	    u256 re_pc;
+             for (auto ctx : function) {
+-              has_loop = has_loop || (ctx.level >= 4 &&  toHex(ctx.payload.data) == "000000ff");
++              auto has_loop_cond = ctx.level >= 4 &&  toHex(ctx.payload.data) == "000000ff";
++              has_loop = has_loop || has_loop_cond;
+               has_transfer = has_transfer || ctx.payload.wei > 0;
++	      if (has_loop_cond) {
++		re_pc = ctx.payload.pc;
++	      }
+             }
+-            vulnerabilities[i] = has_loop && has_transfer;
++	    auto cond = has_loop && has_transfer;
++	    if (cond) {
++              res.insert(re_pc);
++	    }
++            vulnerabilities[i] = cond;
+             break;
+           }
+           case FREEZING: {
+             auto has_delegate = false;
+             auto has_transfer = false;
++	    u256 fe_pc;
+             for (auto ctx: function) {
+               has_delegate = has_delegate || ctx.payload.inst == Instruction::DELEGATECALL;
+               has_transfer = has_transfer || (ctx.level == 1 && (
+diff --git a/liboracle/OracleFactory.h b/liboracle/OracleFactory.h
+index 617a1d8d0..4546d20ef 100644
+--- a/liboracle/OracleFactory.h
++++ b/liboracle/OracleFactory.h
+@@ -11,8 +11,16 @@ class OracleFactory {
+     SingleFunction function;
+     vector<bool> vulnerabilities;
+   public:
++    set<u256> overflows;
++    set<u256> underflows;
++    set<u256> mes;
++    set<u256> tds;
++    set<u256> bds;
++    set<u256> res;
+     void initialize();
+     void finalize();
+     void save(OpcodeContext ctx);
+     vector<bool> analyze();
++    void dumpOverflow(u256 pc);
++    void dumpUnderflow(u256 pc);
+ };
