@@ -1,1 +1,5 @@
 Smartian/
+*.swp
+*.swo
+*.pyc
+output/
