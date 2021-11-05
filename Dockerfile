@@ -4,8 +4,8 @@ WORKDIR /root/
 
 ### Install packages and utilities
 
-# Temp: use local URL for fast download during development.
-RUN sed -i 's/archive.ubuntu.com/ftp.daumkakao.com/g' /etc/apt/sources.list
+# You may replace the URL for into a faster one in your region.
+# RUN sed -i 's/archive.ubuntu.com/ftp.daumkakao.com/g' /etc/apt/sources.list
 ENV DEBIAN_FRONTEND="noninteractive"
 
 RUN apt-get update && \
@@ -66,6 +66,7 @@ USER test
 WORKDIR /home/test
 
 ### Install smart contract testing tools
+RUN mkdir /home/test/tools
 
 # Install ilf
 COPY --chown=test:test ./docker-setup/ilf/ /home/test/tools/ilf
@@ -78,7 +79,6 @@ RUN mv /home/test/tools/ilf/preprocess \
        /home/test/tools/ilf/go/src/ilf/preprocess
 
 # Install sFuzz
-# Temp: Using a local URL to download some package. Replace to GitHub later.
 COPY --chown=test:test ./docker-setup/sFuzz /home/test/tools/sFuzz
 RUN /home/test/tools/sFuzz/install_sFuzz.sh
 
@@ -95,16 +95,19 @@ ENV LANGUAGE en_US.en
 ENV LC_ALL en_US.UTF-8
 RUN /home/test/tools/mythril/install_mythril.sh
 
+# Install Smartian
+RUN cd /home/test/tools/ && \
+    git clone https://github.com/SoftSec-KAIST/Smartian.git && \
+    cd Smartian && \
+    git checkout v1.0 && \
+    git submodule update --init --recursive && \
+    make
+
 # Add scripts for each tool
 COPY --chown=test:test ./docker-setup/tool-scripts/ /home/test/scripts
 
 ### Prepare benchmarks
 
 COPY --chown=test:test ./benchmarks /home/test/benchmarks
-
-# Install Smartian. This comes last since Smartian code actively changes.
-# Temp: Copy the directory since there's no public GitHub repo yet.
-COPY --chown=test:test ./Smartian /home/test/tools/Smartian
-RUN cd /home/test/tools/Smartian && make
 
 CMD ["/bin/bash"]
