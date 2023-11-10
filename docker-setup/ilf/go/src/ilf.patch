@@ -155,7 +155,7 @@ index e02cef2..985de32 100644
                  try:
                      _, value_from_block = logger.trace_log_stack(i-1, -2)
                      if value_from_block:
-+                        if blockstate_op == TIMESTAMP:
++                        if block_state_op == TIMESTAMP:
 +                            if log.pc not in self.tds:
 +                                elapsed = time.time() - self.start_time
 +                                self.dump_bug(elapsed, 'BlockstateDependency', 0, logger.tx.method)
