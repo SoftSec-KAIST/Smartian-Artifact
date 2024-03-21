@@ -5,7 +5,7 @@ set -e
 python3 -m venv /home/test/tools/ilf/venv
 source /home/test/tools/ilf/venv/bin/activate
 python3 -m pip install wheel
-python3 -m pip install z3-solver
+python3 -m pip install "z3-solver==4.8.12.0"
 
 cd /home/test/tools/ilf/go/src
 
@@ -26,7 +26,11 @@ git apply /home/test/tools/ilf/go/src/ilf/script/patch.geth
 cd /home/test/tools/ilf/go/src/ilf
 
 # install python dependencies
-python3 -m pip install -r requirements.txt --no-cache-dir
+python3 -m pip install "cython<3.0.0" --no-cache-dir
+python3 -m pip install cytoolz --no-cache-dir
+
+python3 -m pip install --upgrade pip setuptools 
+python3 -m pip install -r /home/test/tools/ilf/requirements.txt --no-cache-dir
 go build -o execution.so -buildmode=c-shared export/execution.go
 
 # for postprocessing

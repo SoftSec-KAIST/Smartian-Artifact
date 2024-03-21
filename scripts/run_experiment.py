@@ -2,7 +2,7 @@ import sys, os, subprocess, time
 from common import BASE_DIR, BENCHMARK_DIR
 
 IMAGE_NAME = "smartian-artifact"
-MAX_INSTANCE_NUM = 72
+MAX_INSTANCE_NUM = 60
 AVAILABLE_BENCHMARKS = ["B1", "B1-noarg", "B2", "B3"]
 SUPPORTED_TOOLS = ["smartian", "sFuzz", "ilf", "mythril", "manticore"]
 
@@ -34,6 +34,10 @@ def run_cmd_in_docker(container, cmd_str):
 
 def check_cpu_count():
     n_str = run_cmd("nproc")
+
+    #string to int
+    n_str = n_str[2:len(n_str)-3]
+    
     try:
         if int(n_str) < MAX_INSTANCE_NUM:
             print("Not enough CPU cores, please decrease MAX_INSTANCE_NUM")

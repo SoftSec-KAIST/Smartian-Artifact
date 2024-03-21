@@ -14,7 +14,7 @@ RUN apt-get update && \
       build-essential libtool libtool-bin gdb \
       automake autoconf bison flex python sudo vim \
       curl software-properties-common \
-      python3 python3-pip libssl-dev pkg-config \
+      python3 python3-pip libssl-dev pkg-config libffi-dev\
       libsqlite3-0 libsqlite3-dev apt-utils locales \
       python-pip-whl libleveldb-dev python3-setuptools \
       python3-dev pandoc python3-venv \
@@ -41,7 +41,7 @@ WORKDIR /root
 
 # Install nodejs truffle web3 ganache-cli
 RUN npm -g config set user root
-RUN npm install -g truffle web3 ganache-cli
+RUN npm install -g truffle@5.0.35 web3@1.2.2 ganache-cli@6.7.0
 
 # Install go
 RUN wget https://dl.google.com/go/go1.10.4.linux-amd64.tar.gz
@@ -95,6 +95,11 @@ ENV LANGUAGE en_US.en
 ENV LC_ALL en_US.UTF-8
 RUN /home/test/tools/mythril/install_mythril.sh
 
+# Install libssl v1.0.0 for dotnet 5.0
+USER root
+RUN wget http://archive.ubuntu.com/ubuntu/pool/main/o/openssl/libssl1.1_1.1.0g-2ubuntu4_amd64.deb
+RUN dpkg -i libssl1.1_1.1.0g-2ubuntu4_amd64.deb
+USER test
 # Install Smartian
 RUN cd /home/test/tools/ && \
     git clone https://github.com/SoftSec-KAIST/Smartian.git && \
@@ -103,6 +108,7 @@ RUN cd /home/test/tools/ && \
     git submodule update --init --recursive && \
     make
 
+RUN rm -rf libssl1.1_1.1.0g-2ubuntu4_amd64.deb
 # Add scripts for each tool
 COPY --chown=test:test ./docker-setup/tool-scripts/ /home/test/scripts
 
