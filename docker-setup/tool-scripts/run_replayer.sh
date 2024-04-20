@@ -11,31 +11,6 @@ OUTDIR=/home/test/output
 SCRIPTDIR=/home/test/scripts
 REPLAYER=/home/test/tools/Smartian/build/Smartian
 
-function postprocess_ilf() {
-    kill -9 run_ilf.sh
-
-    WORKDIR=/home/test/ilf-workspace
-
-    source /home/test/tools/ilf/venv/bin/activate
-
-    mkdir -p $OUTDIR
-    # Move raw tc
-    mkdir -p $OUTDIR/raw_tc
-    mkdir -p $OUTDIR/raw_misc
-    cp $WORKDIR/output/tc_* $OUTDIR/raw_tc/
-    cp $WORKDIR/proj/build/contracts/*.json $OUTDIR/raw_misc/
-    # Move logs
-    mv $WORKDIR/output/log.txt $OUTDIR/log.txt
-    mv $WORKDIR/output/stdout.txt $OUTDIR/stdout.txt
-
-    # Postprocess
-    python3 $SCRIPTDIR/ilf_postprocess.py $1 $2 $WORKDIR/output
-    # Move output
-    mv $WORKDIR/output $OUTDIR/testcase
-
-    deactivate
-}
-
 function postprocess_sFuzz() {
     kill -9 run_sFuzz.sh
 
@@ -84,32 +59,11 @@ function postprocess_mythril() {
     deactivate
 }
 
-function postprocess_manticore() {
-    kill -9 run_manticore.sh
-
-    WORKDIR=/home/test/manticore-workspace
-
-    source /home/test/tools/manticore/venv/bin/activate
-
-    mkdir -p $OUTDIR
-    # Move logs
-    mv $WORKDIR/output/log.txt $OUTDIR/log.txt
-    mv $WORKDIR/output/stdout.txt $OUTDIR/stdout.txt
-
-    # Postprocess
-    python3 $SCRIPTDIR/manticore_postprocess.py $WORKDIR/output
-    # Move output
-    mv $WORKDIR/output $OUTDIR/testcase
-
-    deactivate
-}
 
 function postprocess() {
     case $1 in
-        ilf) postprocess_ilf $4 $3;;
         sFuzz) postprocess_sFuzz $4;;
         mythril) postprocess_mythril $4 $2;;
-        manticore) postprocess_manticore;;
     esac
 }
 

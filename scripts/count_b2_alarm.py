@@ -58,8 +58,8 @@ def main():
         print("Usage: %s [result dirs ...]" % sys.argv[0])
         exit(1)
 
-    if sys.argv[1] in ["--ilf", "--sfuzz", "--manticore", "--mythril"]:
-        sig_set = "smartian-" + sys.argv[1][2:] # e.g., "smartian-ilf"
+    if sys.argv[1] in ["--sfuzz", "--mythril"]:
+        sig_set = "smartian-" + sys.argv[1][2:] # e.g., "smartian-sfuzz"
         result_dirs = sys.argv[2:]
     else:
         sig_set = "default"

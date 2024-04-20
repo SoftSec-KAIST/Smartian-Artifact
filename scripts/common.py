@@ -34,14 +34,10 @@ def get_tool_sigs(tool, bug_sigs):
     tool = tool.lower()
     if tool == "default":
         return bug_sigs
-    elif tool == "smartian-ilf":
-        return append_sig_suffix(bug_sigs, "ILF")
     elif tool == "smartian-sfuzz":
         return append_sig_suffix(bug_sigs, "SFuzz")
     elif tool == "smartian-mythril":
         return append_sig_suffix(bug_sigs, "Mythril")
-    elif tool == "smartian-manticore":
-        return append_sig_suffix(bug_sigs, "Manticore")
     else:
         print('Invalid tool string: %s' % tool)
         exit(1)

@@ -6,6 +6,15 @@ Ethereum smart contracts. This repository contains artifacts for the
 experiments in our paper in ASE 2021, "Smartian: Enhancing Smart Contract
 Fuzzing with Static and Dynamic Data-Flow Analyses".
 
+# Changes
+
+The original version of artifact at the time publication is tagged with
+[v1.0](https://github.com/SoftSec-KAIST/Smartian-Artifact/releases/tag/v1.0).
+The latest commit uses Ubuntu 20.04 to use net8.0 for Smartian. As a result, we
+had to stop the support of ILF and Manticore in this repository. FYI, the last
+version that uses Ubuntu 18.04 is commit
+[a2d9ba](https://github.com/SoftSec-KAIST/Smartian-Artifact/commits/a2d9ba).
+
 # Structure
 
 We run all our experiments in a dockerized environment. In
@@ -71,14 +80,13 @@ $ ./scripts/test_B2_compare.sh 5
 ```
 
 Then, you will get the raw data under `output/result-B1-compare` and
-`output/result-B2-compare`. Note that ILF does not support integer overflow
-detection, so it is not tested on B1.
+`output/result-B2-compare`.
 
 ```
 $ ls output/result-B1-compare/
-manticore  mythril  sFuzz  smartian
+mythril  sFuzz  smartian
 $ ls output/result-B2-compare/
-ilf  manticore  mythril  sFuzz  smartian
+mythril  sFuzz  smartian
 ```
 
 To obtain the results in our paper, you may refer to the following commands.

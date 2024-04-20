@@ -24,7 +24,7 @@ def analyze_dir(cve_info, result_dir, targ_list):
     return time_map
 
 def print_found_count(time_map_list):
-    found_sets = map(lambda m: set(m.keys()), time_map_list)
+    found_sets = list(map(lambda m: set(m.keys()), time_map_list))
     found_always_n = len(set.intersection(*found_sets))
     found_at_least_once_n = len(set.union(*found_sets))
     found_min_n = min(map(len, found_sets))
@@ -39,7 +39,7 @@ def main():
         print("Usage: %s [result dirs ...]" % sys.argv[0])
         exit(1)
 
-    if sys.argv[1] in ["--sfuzz", "--manticore", "--mythril"]:
+    if sys.argv[1] in ["--sfuzz", "--mythril"]:
         sig_set = "smartian-" + sys.argv[1][2:] # e.g., "smartian-sfuzz"
         result_dirs = sys.argv[2:]
     else:
