@@ -66,16 +66,18 @@ def make_outdir(benchmark, tool):
             return outdir
 
 
-def get_target_bug(target):
-    csv_name = "B1-cve.csv"
-    csv_path = os.path.join(BENCHMARK_DIR, "assets", csv_name)
+def get_B1_target_bug(target, tool):
+    csv_path = os.path.join(BENCHMARK_DIR, "assets", "B1-cve.csv")
     f = open(csv_path, "r")
     for line in f:
         line = line.strip()
         if line != "":
             if target == line.split(',')[0]:
                 f.close()
-                return " -b IB:" + line.split(',')[2]
+                if tool == "smartian":
+                    return "-b IB:" + line.split(',')[2]
+                elif tool == "SmarTest":
+                    return "-target_bug IO:" + line.split(',')[1]
 
 def get_targets(benchmark):
     list_name = benchmark + ".list"
@@ -110,8 +112,8 @@ def run_fuzzing(benchmark, target, tool, timelimit, opt, cpu_idx):
     src = "/home/test/benchmarks/%s/sol/%s.sol" % (bench_dirname, targ)
     bin = "/home/test/benchmarks/%s/bin/%s.bin" % (bench_dirname, targ)
     abi = "/home/test/benchmarks/%s/abi/%s.abi" % (bench_dirname, targ)
-    if "B1" in benchmark and tool == "smartian":
-        opt = opt + " " + str(get_target_bug(targ))
+    if "B1" in benchmark and tool in ["smartian", "SmarTest"]:
+        opt = opt + " " + str(get_B1_target_bug(targ, tool))
     args = "%d %s %s %s %s '%s'" % (timelimit, src, bin, abi, name, opt)
     script = "/home/test/scripts/run_%s.sh" % tool
     cmd = "%s %s" % (script, args)

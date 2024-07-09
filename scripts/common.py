@@ -38,6 +38,8 @@ def get_tool_sigs(tool, bug_sigs):
         return append_sig_suffix(bug_sigs, "SFuzz")
     elif tool == "smartian-mythril":
         return append_sig_suffix(bug_sigs, "Mythril")
+    elif tool == "smartian-smartest":
+        return append_sig_suffix(bug_sigs, "SmarTest")
     else:
         print('Invalid tool string: %s' % tool)
         exit(1)
@@ -53,9 +55,13 @@ def init_b1_cve_info(IB_sig):
             print("Invalid entry in CSV file: %s" % buf)
             exit(1)
         targ = tokens[0]
+        cve_info[targ] = []
+        # The second column contains the line number of the bug in solidity source code.
+        cve_lines = tokens[1].split("/")
+        for cve_line in cve_lines:
+            cve_info[targ].append((IB_sig, cve_line))
         # The third column contains the PC address of add/sub/mul.
         cve_pcs = tokens[2].split("/")
-        cve_info[targ] = []
         for cve_pc in cve_pcs:
             cve_info[targ].append((IB_sig, cve_pc))
     cve_csv_file.close()

@@ -31,6 +31,11 @@ RUN wget https://packages.microsoft.com/config/ubuntu/20.04/packages-microsoft-p
     rm -f packages-microsoft-prod.deb
 ENV DOTNET_CLI_TELEMETRY_OPTOUT=1
 
+# Install opam
+RUN add-apt-repository ppa:avsm/ppa && \
+    apt-get update -y && \
+    apt-get -yy install opam ocaml ocaml-findlib
+
 # Install Solidity compiler
 WORKDIR /usr/bin
 RUN wget https://github.com/ethereum/solidity/releases/download/v0.4.25/solc-static-linux
@@ -49,6 +54,10 @@ WORKDIR /home/test
 
 ### Install smart contract testing tools
 RUN mkdir /home/test/tools
+
+# Install SmarTest
+COPY --chown=test:test ./docker-setup/SmarTest/ /home/test/tools/SmarTest
+RUN /home/test/tools/SmarTest/install_SmarTest.sh
 
 # Install sFuzz
 COPY --chown=test:test ./docker-setup/sFuzz /home/test/tools/sFuzz

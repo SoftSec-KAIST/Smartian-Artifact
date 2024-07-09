@@ -1,0 +1,111 @@
+diff --git a/src/exploit/exploit.ml b/src/exploit/exploit.ml
+index b51d77f..502f8dd 100644
+--- a/src/exploit/exploit.ml
++++ b/src/exploit/exploit.ml
+@@ -93,14 +93,20 @@ let rec work : Global.t -> TypeRank.t -> string BatSet.t -> count_maps ->
+     let workset = Workset.remove_min workset in
+     let (state,queries) = exec_transactions global tseq in
+     let qmap = inspect_queries global tseq queries qmap in
+-    let nexts = next state global paths tseq in
+-    let nexts = List.filter (fun tseq -> not (tseq_contain_extern_log global (BatList.take (BatList.length tseq - 1) tseq))) nexts in
+-    let dup_exist = List.exists (fun next_tseq -> (BatSet.mem (List.map fst next_tseq) explored)) nexts in
+-    let _ = assert (not dup_exist) in (* invariant: duplicated sequences are not enumerated *)
+-    let explored = List.fold_left (fun acc next_tseq -> BatSet.add (List.map fst next_tseq) acc) explored nexts in
+-    let nexts = List.map (fun next -> (compute_cost global rank dict counts next, next)) nexts in
+-    let workset = List.fold_left Workset.add workset nexts in
+-    work global rank dict counts paths explored workset qmap
++    let vul_qs = QMap.bindings qmap in
++    let vul_found = List.filter (fun ((kind,loc,_), (stat,_,_,_,_,_,_,_,_)) -> stat = Disproven && List.mem (to_string_kind_simple kind,loc) !blst) vul_qs in
++    if List.length vul_found > 0 then
++      let _ = earlyTerminated := true in
++      qmap
++    else
++      let nexts = next state global paths tseq in
++      let nexts = List.filter (fun tseq -> not (tseq_contain_extern_log global (BatList.take (BatList.length tseq - 1) tseq))) nexts in
++      let dup_exist = List.exists (fun next_tseq -> (BatSet.mem (List.map fst next_tseq) explored)) nexts in
++      let _ = assert (not dup_exist) in (* invariant: duplicated sequences are not enumerated *)
++      let explored = List.fold_left (fun acc next_tseq -> BatSet.add (List.map fst next_tseq) acc) explored nexts in
++      let nexts = List.map (fun next -> (compute_cost global rank dict counts next, next)) nexts in
++      let workset = List.fold_left Workset.add workset nexts in
++      work global rank dict counts paths explored workset qmap
+ 
+ let scan_node : Global.t -> cfg -> Path.t -> Node.t -> query list
+ = fun global g path node -> CollectQuery.collect global g VTrue path node
+diff --git a/src/exploit/reportExploit.ml b/src/exploit/reportExploit.ml
+index ee44c23..ce9f090 100644
+--- a/src/exploit/reportExploit.ml
++++ b/src/exploit/reportExploit.ml
+@@ -151,7 +151,7 @@ let retrieve_i : int -> Z3.Model.model -> param list -> (var * string list) list
+       (*
+       let n = match snd var with EType (Bytes n') -> n' | _ -> assert false in
+       acc @ [(var_org, ["0x" ^ BatString.repeat "0" (n*2)])] *)
+-    
++
+     else
+       acc @ [(var_org, [eval_model model (snd var) (ivar_to_z3exp tid var)])]
+   ) [] params
+@@ -241,7 +241,7 @@ let get_invested : Global.t -> transaction list -> Z3.Model.model ->
+     let func = FuncMap.find (Path.get_fkey path) global.fmap in
+     let ivars = get_params func in
+     get_invested' tid ivars model acc
+-  ) BatSet.empty tseq 
++  ) BatSet.empty tseq
+ 
+ 
+ let retrieve : Global.t -> transaction list -> Z3.Model.model -> int ->
+@@ -384,7 +384,9 @@ let report ~pathnum : Global.t -> QMap.t -> string list -> unit
+   let vul_found = List.filter (fun ((kind,_,_),(stat,_,_,_,_,_,_,_,_)) -> stat = Disproven) vul_qs in
+   print_endline "";
+   report_interface_deviation ();
+-  print_endline "=== Report ===";
++  if !earlyTerminated then
++    print_endline "=== Report (early termination) ==="
++  else print_endline "=== Report ===";
+   List.iteri (fun i ((kind,loc,_) as src, (stat, tseq, mop, vc, sc_src, attacker_src, stolen_eth_src, time, validated)) ->
+     let s1 = "[" ^ string_of_int (i+1) ^ "]" ^ " " ^ "[" ^ Query.to_string_kind_simple kind ^ "]" ^ " " in
+     let s2 = Query.to_string_src src ^ " : " ^ to_string_status stat ^ (if not (stat = UnProven) then ", " ^ string_of_float time ^ "s" else "") in
+diff --git a/src/util/options.ml b/src/util/options.ml
+index 83a0fc7..c230884 100644
+--- a/src/util/options.ml
++++ b/src/util/options.ml
+@@ -46,6 +46,12 @@ let refined_vcgen = ref false
+ 
+ let outdir = ref ""
+ 
++module BugMap = Map.Make(String)
++
++let blst: (string * int) list ref = ref [] (* [(IO,124); (IO,155)] *)
++
++let earlyTerminated = ref false
++
+ let activate_detector s =
+   match s with
+   | "all" -> (* all but invalid assignment, reg checking *)
+@@ -86,6 +92,19 @@ let set_mode s =
+   | "verify" | "exploit" -> mode:=s
+   | _ -> invalid_arg "improper arguments for run mode. Should be one of {verify, exploit}"
+ 
++let parse_bugs s =
++  let l = Str.split (Str.regexp ",") s in (* IO:124/155,DZ:132 *)
++  List.iter (fun x ->
++      let l = Str.split (Str.regexp ":") x in (* [IO; 124/155] *)
++      match l with
++      | [bug; loc] ->
++        let locs = Str.split (Str.regexp "/") loc in
++        let locs = List.map (fun loc -> int_of_string loc) locs in (* int list *)
++        List.iter (fun loc -> blst := (bug, loc)::!blst) locs
++      | _ -> invalid_arg ("invalid bug format: " ^ x)
++  ) l;
++  !blst
++
+ let options =
+   [
+     ("-input", Arg.String (fun s -> inputfile := s), "inputfile containing your examples");
+@@ -122,4 +141,7 @@ let options =
+     ("-enforce_init_eth", Arg.Set enforce_init_eth, "do not modify contract ether values (default: false)");
+     ("-refined_vcgen", Arg.Set refined_vcgen, "generate vcs that consider normal terminations of transactions.");
+     ("-outdir", Arg.String (fun s -> outdir:= s), "directory where analysis outputs are stored");
++    ("-target_bug", Arg.String (fun s -> blst := parse_bugs s), "Target bugs to detect (pairs of bug type and instruction address)\n\
++                                                                IO(Interger Over/Underflow), DZ(Division-by-Zero), ASSERT(Assertion Violation), ETH_LEAK(Ether-Leaking), KILL(Suicidal)\n\
++                                                                 e.g., IO:124/155,DZ:132)");
+   ]
