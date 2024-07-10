@@ -1,4 +1,5 @@
 import sys, os, subprocess, time
+from subprocess import PIPE
 from common import BASE_DIR, BENCHMARK_DIR
 
 IMAGE_NAME = "smartian-artifact"
@@ -6,38 +7,32 @@ MAX_INSTANCE_NUM = 60
 AVAILABLE_BENCHMARKS = ["B1", "B1-noarg", "B2", "B3"]
 SUPPORTED_TOOLS = ["smartian", "sFuzz", "mythril"]
 
-def run_cmd(cmd_str):
-    print("[*] Executing: %s" % cmd_str)
-    cmd_args = cmd_str.split()
+
+def run_cmd(cmd_str, check=True):
+    print("[*] Executing command '%s'" % cmd_str)
+    args = cmd_str.split()
     try:
-        PIPE = subprocess.PIPE
-        p = subprocess.Popen(cmd_args, stdin=PIPE, stdout=PIPE, stderr=PIPE)
-        output, err = p.communicate()
-        return str(output)
+        p = subprocess.run(args, check=check, stdout=PIPE, stderr=PIPE)
+        return p.stdout
     except Exception as e:
         print(e)
         exit(1)
 
-def run_cmd_in_docker(container, cmd_str):
-    print("[*] Executing (in container): %s" % cmd_str)
-    cmd_prefix = "docker exec -d %s /bin/bash -c" % container
-    cmd_args = cmd_prefix.split()
-    cmd_args += [cmd_str]
+
+def run_cmd_in_docker(container, cmd_str, check=True):
+    print("[*] Executing '%s' in container %s" % (cmd_str, container))
+    docker_prefix = "docker exec -d %s /bin/bash -c" % container
+    args = docker_prefix.split() + [cmd_str]
     try:
-        PIPE = subprocess.PIPE
-        p = subprocess.Popen(cmd_args, stdin=PIPE, stdout=PIPE, stderr=PIPE)
-        output, err = p.communicate()
-        return str(output)
+        p = subprocess.run(args, check=check, stdout=PIPE, stderr=PIPE)
+        return p.stdout
     except Exception as e:
         print(e)
         exit(1)
+
 
 def check_cpu_count():
     n_str = run_cmd("nproc")
-
-    #string to int
-    n_str = n_str[2:len(n_str)-3]
-    
     try:
         if int(n_str) < MAX_INSTANCE_NUM:
             print("Not enough CPU cores, please decrease MAX_INSTANCE_NUM")
