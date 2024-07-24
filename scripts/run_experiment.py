@@ -58,6 +58,17 @@ def decide_bench_dirname(benchmark):
         print("Unexpected benchmark: %s" % benchmark)
         exit(1)
 
+def get_target_bug(target):
+    csv_name = "B1-cve.csv"
+    csv_path = os.path.join(BENCHMARK_DIR, "assets", csv_name)
+    f = open(csv_path, "r")
+    for line in f:
+        line = line.strip()
+        if line != "":
+            if target == line.split(',')[0]:
+                f.close()
+                return " -b IB:" + line.split(',')[2]
+
 def get_targets(benchmark):
     list_name = benchmark + ".list"
     list_path = os.path.join(BENCHMARK_DIR, "assets", list_name)
@@ -92,6 +103,8 @@ def run_fuzzing(benchmark, targets, tool, timelimit, opt):
         src = "/home/test/benchmarks/%s/sol/%s.sol" % (bench_dirname, targ)
         bin = "/home/test/benchmarks/%s/bin/%s.bin" % (bench_dirname, targ)
         abi = "/home/test/benchmarks/%s/abi/%s.abi" % (bench_dirname, targ)
+        if "B1" in benchmark and tool == "smartian":
+            opt = opt + " " + str(get_target_bug(targ))
         args = "%d %s %s %s %s '%s'" % (timelimit, src, bin, abi, name, opt)
         script = "/home/test/scripts/run_%s.sh" % tool
         cmd = "%s %s" % (script, args)
