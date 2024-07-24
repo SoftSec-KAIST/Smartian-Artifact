@@ -34,4 +34,6 @@ pysha3
 matplotlib
 pythx
 pre-commit
-certifi>=2020.06.20
+certifi==2020.06.20
+typing_extensions==4.5.0
+typing-inspect==0.8.0
