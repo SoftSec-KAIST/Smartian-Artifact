@@ -21,11 +21,9 @@ fi
 mkdir -p $OUTDIR/result-B2-compare
 
 # Run smartian, sFuzz, and mythril.
-for i in $(seq $1); do
-    python $SCRIPTDIR/run_experiment.py B2 smartian 3600
-    python $SCRIPTDIR/run_experiment.py B2 sFuzz 3600
-    python $SCRIPTDIR/run_experiment.py B2 mythril 3600
-done
+python $SCRIPTDIR/run_experiment.py B2 smartian 3600 $1
+python $SCRIPTDIR/run_experiment.py B2 sFuzz 3600 $1
+python $SCRIPTDIR/run_experiment.py B2 mythril 3600 $1
 mkdir -p $OUTDIR/result-B2-compare/smartian
 mv $OUTDIR/B2-smartian-* $OUTDIR/result-B2-compare/smartian/
 mkdir -p $OUTDIR/result-B2-compare/sFuzz

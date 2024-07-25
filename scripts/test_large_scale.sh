@@ -20,7 +20,5 @@ fi
 
 mkdir -p $OUTDIR/result-large-scale/
 
-for i in $(seq $1); do
-    python $SCRIPTDIR/run_experiment.py B3 smartian 3600
-done
+python $SCRIPTDIR/run_experiment.py B3 smartian 3600 $1
 mv $OUTDIR/B3-smartian-* $OUTDIR/result-large-scale/

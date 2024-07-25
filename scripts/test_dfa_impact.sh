@@ -21,29 +21,21 @@ fi
 mkdir -p $OUTDIR/result-dfa-impact
 
 # With both data-flow analyses enabled.
-for i in $(seq $1); do
-    python $SCRIPTDIR/run_experiment.py B1 smartian 3600
-done
+python $SCRIPTDIR/run_experiment.py B1 smartian 3600 $1
 mkdir -p $OUTDIR/result-dfa-impact/dfa
 mv $OUTDIR/B1-smartian-* $OUTDIR/result-dfa-impact/dfa/
 
 # With only static data-flow analysis enabled.
-for i in $(seq $1); do
-    python $SCRIPTDIR/run_experiment.py B1 smartian 3600 --noddfa
-done
+python $SCRIPTDIR/run_experiment.py B1 smartian 3600 $1 --noddfa
 mkdir -p $OUTDIR/result-dfa-impact/static
 mv $OUTDIR/B1-smartian-* $OUTDIR/result-dfa-impact/static/
 
 # With only dynamic data-flow analysis enabled.
-for i in $(seq $1); do
-    python $SCRIPTDIR/run_experiment.py B1 smartian 3600 --nosdfa
-done
+python $SCRIPTDIR/run_experiment.py B1 smartian 3600 $1 --nosdfa
 mkdir -p $OUTDIR/result-dfa-impact/dynamic
 mv $OUTDIR/B1-smartian-* $OUTDIR/result-dfa-impact/dynamic/
 
 # Without any data-flow analysis.
-for i in $(seq $1); do
-    python $SCRIPTDIR/run_experiment.py B1 smartian 3600 "--noddfa --nosdfa"
-done
+python $SCRIPTDIR/run_experiment.py B1 smartian 3600 $1 "--noddfa --nosdfa"
 mkdir -p $OUTDIR/result-dfa-impact/nodfa
 mv $OUTDIR/B1-smartian-* $OUTDIR/result-dfa-impact/nodfa/
