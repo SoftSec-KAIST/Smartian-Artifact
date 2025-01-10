@@ -8,7 +8,7 @@ Fuzzing with Static and Dynamic Data-Flow Analyses".
 
 # Changes
 
-The original version of artifact at the time publication is tagged with
+The original version of artifact at the time of publication is tagged with
 [v1.0](https://github.com/SoftSec-KAIST/Smartian-Artifact/releases/tag/v1.0).
 The latest commit uses Ubuntu 20.04 to use net8.0 for Smartian. As a result, we
 had to stop the support of ILF and Manticore in this repository. FYI, the last
