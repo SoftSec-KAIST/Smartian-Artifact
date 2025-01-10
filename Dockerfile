@@ -61,11 +61,11 @@ ENV LANGUAGE en_US.en
 ENV LC_ALL en_US.UTF-8
 RUN /home/test/tools/mythril/install_mythril.sh
 
-# Install Smartian (commit badd4ff, which successfully runs on Ubuntu 20.04)
+# Install Smartian
 RUN cd /home/test/tools/ && \
     git clone https://github.com/SoftSec-KAIST/Smartian.git && \
     cd Smartian && \
-    git checkout badd4ff && \
+    git checkout 2f7d555 && \
     git submodule update --init --recursive && \
     make
 
