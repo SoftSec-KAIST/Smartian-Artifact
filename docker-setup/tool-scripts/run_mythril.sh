@@ -10,6 +10,7 @@
 
 TOOLDIR=/home/test/tools/mythril
 WORKDIR=/home/test/mythril-workspace
+OUTDIR=/home/test/output
 
 source /home/test/tools/mythril/venv/bin/activate
 
@@ -22,5 +23,24 @@ touch $WORKDIR/output/log.txt
 # Run mythril
 $TOOLDIR/mythril/myth analyze -f $3 --execution-timeout $1 $6 > \
   $WORKDIR/output/stdout.txt 2>&1
+
+# Postprocess
+kill -9 run_mythril.sh
+
+WORKDIR=/home/test/mythril-workspace
+
+source /home/test/tools/mythril/venv/bin/activate
+
+mkdir -p $OUTDIR
+# Move logs
+mv $WORKDIR/output/log.txt $OUTDIR/log.txt
+mv $WORKDIR/output/stdout.txt $OUTDIR/stdout.txt
+# Move bug tc
+mv $WORKDIR/output/bugs $OUTDIR/bugs
+# Move raw tc
+mkdir -p $OUTDIR/raw_tc
+cp $WORKDIR/output/tc_* $OUTDIR/raw_tc/
+# Move output
+mv $WORKDIR/output $OUTDIR/testcase
 
 deactivate

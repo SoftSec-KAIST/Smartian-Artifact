@@ -98,18 +98,6 @@ def run_fuzzing(benchmark, targets, tool, timelimit, opt):
         run_cmd_in_docker(targ, cmd)
     time.sleep(timelimit + 180)
 
-def measure_coverage(benchmark, targets, tool):
-    bench_dirname = decide_bench_dirname(benchmark)
-    plot_intv = 1 # Plot coverage for each minute.
-    for targ, name in targets:
-        bin = "/home/test/benchmarks/%s/bin/%s.bin" % (bench_dirname, targ)
-        abi = "/home/test/benchmarks/%s/abi/%s.abi" % (bench_dirname, targ)
-        args = "%s %s %s %s %d" % (tool, bin, abi, name, plot_intv)
-        script = "/home/test/scripts/run_replayer.sh"
-        cmd = "%s %s" % (script, args)
-        run_cmd_in_docker(targ, cmd)
-    time.sleep(60)
-
 def store_outputs(targets, outdir):
     for targ, _ in targets:
         cmd = "docker cp %s:/home/test/output %s/%s" % (targ, outdir, targ)
@@ -146,7 +134,6 @@ def main():
         work_targets = fetch_works(targets)
         spawn_containers(work_targets)
         run_fuzzing(benchmark, work_targets, tool, timelimit, opt)
-        measure_coverage(benchmark, work_targets, tool)
         store_outputs(work_targets, outdir)
         cleanup_containers(work_targets)
 
