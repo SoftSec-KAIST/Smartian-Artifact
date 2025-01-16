@@ -56,9 +56,9 @@ RUN /home/test/tools/sFuzz/install_sFuzz.sh
 
 # Install mythril
 COPY --chown=test:test ./docker-setup/mythril/ /home/test/tools/mythril
-ENV LANG en_US.UTF-8
-ENV LANGUAGE en_US.en
-ENV LC_ALL en_US.UTF-8
+ENV LANG=en_US.UTF-8
+ENV LANGUAGE=en_US.en
+ENV LC_ALL=en_US.UTF-8
 RUN /home/test/tools/mythril/install_mythril.sh
 
 # Install Smartian
