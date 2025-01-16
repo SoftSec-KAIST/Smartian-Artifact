@@ -1,5 +1,5 @@
 diff --git a/CMakeLists.txt b/CMakeLists.txt
-index e48a9dc9b..140e32c2a 100644
+index e48a9dc9b..46eb5400e 100644
 --- a/CMakeLists.txt
 +++ b/CMakeLists.txt
 @@ -39,8 +39,8 @@ option(HUNTER_RUN_UPLOAD "Upload binaries to the cache server" ${run_upload})
@@ -13,6 +13,16 @@ index e48a9dc9b..140e32c2a 100644
      LOCAL
  )
  
+diff --git a/cmake/Hunter/config.cmake b/cmake/Hunter/config.cmake
+index 1eae22271..24bad357f 100644
+--- a/cmake/Hunter/config.cmake
++++ b/cmake/Hunter/config.cmake
+@@ -17,4 +17,3 @@ hunter_config(
+     HTTP_CLIENT=NO
+ )
+ 
+-hunter_config(Boost VERSION 1.65.1)
+\ No newline at end of file
 diff --git a/fuzzer/Utils.h b/fuzzer/Utils.h
 index 3aa848702..f6c8cc85a 100644
 --- a/fuzzer/Utils.h
