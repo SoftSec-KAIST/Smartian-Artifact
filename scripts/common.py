@@ -173,3 +173,12 @@ def plot_count_over_time(bug_sigs, time_map_list):
         count_avg = float(sum(count_list)) / len(count_list)
         print("%02dm: %.1f" % (minute, count_avg))
 
+def print_median_time(bug_sig, targ_list, time_map_list):
+    iter_cnt = len(time_map_list)
+    for targ in targ_list:
+        found_times = collect_found_times(bug_sig, time_map_list, targ)
+        found_times.sort()
+        if len(found_times) <= iter_cnt/2: 
+            print("%s: N/A" % targ)
+        else:
+            print("%s: %.2f" % (targ, found_times[iter_cnt//2]))
