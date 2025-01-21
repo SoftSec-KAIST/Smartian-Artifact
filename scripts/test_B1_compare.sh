@@ -21,17 +21,17 @@ fi
 mkdir -p $OUTDIR/result-B1-compare
 
 # Run smartian, sFuzz, mythril, and SmarTest.
-python $SCRIPTDIR/run_experiment.py B1-noarg smartian 3600 $1
-python $SCRIPTDIR/run_experiment.py B1-noarg sFuzz 3600 $1
-python $SCRIPTDIR/run_experiment.py B1-noarg mythril 3600 $1
-python $SCRIPTDIR/run_experiment.py B1-noarg SmarTest 3600 $1
+python $SCRIPTDIR/run_experiment.py B1 smartian 3600 $1
+python $SCRIPTDIR/run_experiment.py B1 sFuzz 3600 $1
+python $SCRIPTDIR/run_experiment.py B1 mythril 3600 $1
+python $SCRIPTDIR/run_experiment.py B1 SmarTest 3600 $1
 
 mkdir -p $OUTDIR/result-B1-compare/smartian
-mv $OUTDIR/B1-noarg-smartian-* $OUTDIR/result-B1-compare/smartian/
+mv $OUTDIR/B1-smartian-* $OUTDIR/result-B1-compare/smartian/
 mkdir -p $OUTDIR/result-B1-compare/sFuzz
-mv $OUTDIR/B1-noarg-sFuzz-* $OUTDIR/result-B1-compare/sFuzz/
+mv $OUTDIR/B1-sFuzz-* $OUTDIR/result-B1-compare/sFuzz/
 mkdir -p $OUTDIR/result-B1-compare/mythril
-mv $OUTDIR/B1-noarg-mythril-* $OUTDIR/result-B1-compare/mythril/
+mv $OUTDIR/B1-mythril-* $OUTDIR/result-B1-compare/mythril/
 
 mkdir -p $OUTDIR/result-B1-compare/SmarTest
-mv $OUTDIR/B1-noarg-SmarTest-* $OUTDIR/result-B1-compare/SmarTest/
+mv $OUTDIR/B1-SmarTest-* $OUTDIR/result-B1-compare/SmarTest/
