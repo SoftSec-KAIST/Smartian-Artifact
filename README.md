@@ -8,12 +8,15 @@ Fuzzing with Static and Dynamic Data-Flow Analyses".
 
 # Changes
 
-The original version of artifact at the time of publication is tagged with
-[v1.0](https://github.com/SoftSec-KAIST/Smartian-Artifact/releases/tag/v1.0).
-The latest commit uses Ubuntu 20.04 to use net8.0 for Smartian. As a result, we
-had to stop the support of ILF and Manticore in this repository. FYI, the last
-version that uses Ubuntu 18.04 is commit
-[a2d9ba](https://github.com/SoftSec-KAIST/Smartian-Artifact/commits/a2d9ba).
+- As the latest Smartian requires net8.0 to run, we updated the base Ubuntu
+  image to 20.04. Due to this change, we had to stop the support of ILF
+  and Manticore. Instead, we added SmarTest as a comparison target.
+- Scripts for coverage measurement has been removed, in order to ease the
+  process of integrating new testing tools into the artifact.
+- The original version of artifact at the time of publication is tagged with
+  [v1.0](https://github.com/SoftSec-KAIST/Smartian-Artifact/releases/tag/v1.0).
+  The last version that uses Ubuntu 18.04 is commit
+  [a2d9ba](https://github.com/SoftSec-KAIST/Smartian-Artifact/commits/a2d9ba).
 
 # Structure
 
@@ -33,11 +36,11 @@ docker image name 'smartian-artifact', using our [Dockerfile](./Dockerfile).
 $ ./build.sh
 ```
 
-Next, check the `MAX_INSTANCE_NUM` configurations parameter in
-[scripts/run\_experiment.py](./scripts/run_experiment.py) script.
-We ran the experiments in a server machine with 88 cores, so this parameter is
-currently set to 72. Make sure that this parameter value is lower than the
-number of cores in your machine.
+Next, check the `MAX_INSTANCE_NUM` configuration parameter in
+[scripts/run\_experiment.py](./scripts/run_experiment.py) script, which decides
+the number of containers to run in parallel.  Currently, this parameter is set
+to 60. Make sure that this parameter value is lower than the number of cores in
+your machine.
 
 # Evaluation of the impact of data-flow-analyses
 
