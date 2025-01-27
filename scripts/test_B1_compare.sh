@@ -8,8 +8,8 @@ if [ "$#" -ne 1 ]; then
     exit
 fi
 
-if ls $OUTDIR/B1-noarg-* 1> /dev/null 2>&1; then
-    echo "$OUTDIR/B1-noarg-* exists, please remove it."
+if ls $OUTDIR/B1-* 1> /dev/null 2>&1; then
+    echo "$OUTDIR/B1-* exists, please remove it."
     exit 1
 fi
 
